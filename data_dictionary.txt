@@ -1,0 +1,33 @@
+                                         Variable                                                                                           Description
+                                       population                                                                                            population
+                                             area                                                                            surface area in km squared
+                                       gini_index                                     inequality in the distribution of family income. Lower the better
+                               happy_planet_index                  well being + life expectancy + inequalities + ecological footprint (higher = better)
+                                        hdi_index                                         healthy life + knowledge + standard of living (high = better)
+                            world_happiness_score                             polled inhabitants rate their quality of life from 1-10 (higher = better)
+      sustainable_economic_development_assessment    an assessment based on 40 indicators in sustainability, economics, & investments (higher = better)
+                                     gdp_billions                                                                                       GDP in billions
+                                   gdp_per_capita                                                                                        GDP per capita
+                            gdp_growth_annual_pct                                                                          Annual GDP growth percentage
+                       health_expenditure_pct_gdp                                                             Health expenditure as a percentage of GDP
+                    health_expenditure_per_person                                                                             (current international $)
+                    education_expenditure_pct_gdp                                                          Education expenditure as a percentage of GDP
+                 education_expenditure_per_person                                                                              (current USD per capita)
+                                     school_years                                                    average male & female, primary to tertiary (years)
+                                 unemployment_pct                                                                                    Percent unemployed
+                        government_spending_score                                                      Burden of gov spending on the country (0 = best)
+                   government_expenditure_pct_gdp                                                         Government expenditure as a percentage of GDP
+                           political_rights_score                                                                            out of 7 (higher = better)
+                            civil_liberties_score                                                                            out of 7 (higher = better)
+                              political_stability                                           Likelihood of political instability and absence of violence
+                         government_effectiveness     Quality of public services, civil service, policy formation, government commitment (-2.5 to +2.5)
+                               regulatory_quality                                                           level of policies to support private sector
+                                      rule_of_law                                               quality of rule of law + likelihood of crime / violence
+                            control_of_corruption                                                                    A measure of control of corruption
+                     judicial_effectiveness_score                               judicial independence + quality of the judicial process, fairness (100)
+                       government_integrity_score                                                              Public trust + transparency + corruption
+                            property_rights_score                                                  How freely can inhabitants acquire private property?
+                                 tax_burden_score                                      Individual tax rate + corporate tax rate + total tax as % of GDP
+                   overall_economic_freedom_score                                                          Measure of the economic freedom of residents
+                          financial_freedom_score      Level of gov regulation of financial services, foreign competition, credit & capital development
+                                    women_mps_pct                                                                          Percent of MPs who are women

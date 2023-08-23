@@ -1,0 +1,500 @@
+---
+title: "Data project 3: World happiness"
+author: "Joy Lin"
+output: 
+  pdf_document:
+          number_sections: false
+---
+
+
+
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(fastDummies)
+library(scales)
+library(yardstick)
+library(fastmatrix)
+library(L1pack)
+library(pls)
+happiness_train <- read_csv("happiness_train.csv")
+happiness_test <- read_csv("happiness_test.csv")
+```
+
+
+## Problem 1: Exploring and explaining the data
+
+
+### Part (a)
+
+```{r}
+
+ggplot(happiness_train) +
+  geom_boxplot(aes(x = world_happiness_score)) +
+  labs(title = "Distribution of World Happiness Score",
+       x = "Happiness Score") +
+  geom_point(aes(x = 5.7,
+                 y = 0),
+             colour = "red") +
+  ylim(-0.7,0.7) +
+  theme_classic() +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  geom_vline(xintercept = mean(happiness_train$world_happiness_score), 
+             color = "cornflowerblue", size = 1) +
+  annotate("text", 
+           x = 5.75,
+           y = 0.05, 
+           label = 5.7) +
+  scale_x_continuous(breaks = seq(0, 8, 0.5))
+
+```
+#If a country achieved a happiness score of 5.7, indicated by the red dot, my slightly-left-skewed boxplot shows that it was a average but relatively good score, which is not only above the blue vertical line indicating the mean of the world happiness score across countries but also above the median.
+
+
+### Part (b)
+
+```{r}
+
+ggplot(happiness_train, 
+       aes(x = school_years,
+           y = world_happiness_score)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(title = "Relationship between School Years and World Happiness Score",
+       x = "School Years",
+       y = "World Happiness Score") +
+  scale_x_continuous(breaks = seq(0, 20, 1)) +
+  theme_classic()
+
+```
+# From my figure, the World Happiness Score increases as the School Year increases. I think that these two features have an approximately linear, positive relationship.
+
+
+### Part (c)
+
+```{r}
+
+ggplot(happiness_train, 
+       aes(x = government_spending_score,
+           y = world_happiness_score,
+           color = government_expenditure_pct_gdp)) +
+  geom_point() +
+  geom_smooth() +
+  labs(title = "Relationship between Government and World Happiness Score",
+       x = "Government Spending Score",
+       y = "World Happiness Score") +
+  guides(color = guide_legend(title="Government Expenditure PCT GDP")) +
+  scale_x_continuous(breaks = seq(0, 100, 5)) +
+  theme_classic()
+
+```
+# From my figure, the World Happiness Score decreases as the Government Spending Score increases, while World Happiness Score increases as Government Expenditure PCT GDP increases, which indicates that as Government Expenditure PCT GDP increases Government Spending Score decreases.
+
+
+
+## Problem 2: Fitting linear regression models
+
+
+### Part (a)
+
+```{r}
+
+happiness_train_2a <- select(happiness_train, c(world_happiness_score, hdi_index, health_expenditure_per_person, school_years, government_spending_score, women_mps_pct))
+
+X <- happiness_train_2a %>%
+  mutate(intercept = 1) %>%
+  select(-world_happiness_score) %>%
+  as.matrix
+y <- happiness_train_2a$world_happiness_score
+
+beta <- solve(t(X) %*% X) %*% t(X) %*% y
+beta
+
+# fitting the LS algorithm with lm()
+lm(world_happiness_score ~ ., data = happiness_train_2a)
+
+```
+# world_happiness_score 
+# = 4.8104636 * hdi_index 
+# + .0001912 * health_expenditure_per_person 
+# - 0.0441369 * school_years
+# + 0.0004846 * government_spending_score 
+# + 0.0124362 * women_mps_pct
+# + 2.0201516
+
+
+### Part (b)
+
+```{r}
+
+# identify highly correlated variables
+happiness_train %>%
+  select_if(is.numeric) %>%
+  # get correlation matrix
+  cor() %>%
+  # convert to data frame
+  as.data.frame() %>%
+  # create column from rownames
+  rownames_to_column(var = "var1") %>%
+  # create long-form data
+  pivot_longer(2:(ncol(happiness_train)), 
+               names_to = "var2", values_to = "cor") %>%
+  # remove rows computing correlation with world_happiness_score or of a variable with itself
+  filter(var1 != "world_happiness_score", var2 != "world_happiness_score",
+         var1 != var2) %>%
+  # arrange in decreasing absolute value correlation
+  arrange(desc(abs(cor))) %>%
+  filter(abs(cor) > 0.9)
+
+# compute the correlation of each feature with world_happiness_score
+cor_df <- happiness_train %>%
+  select_if(is.numeric) %>%
+  # compute correlation matrix
+  cor() %>%
+  as.data.frame() %>%
+  # pull world_happiness_score column
+  select(world_happiness_score_cor = world_happiness_score) %>%
+  # arrange in decreasing order of (abs val) world_happiness_score correlation
+  arrange(desc(abs(world_happiness_score_cor))) %>%
+  rownames_to_column(var = "variable")
+
+# identify which of each pair is more correlated with world_happiness_score
+cor_df %>% 
+  filter(variable %in% c("government_spending_score", "government_expenditure_pct_gdp"))
+cor_df %>% 
+  filter(variable %in% c("government_effectiveness", "rule_of_law"))
+cor_df %>% 
+  filter(variable %in% c("regulatory_quality", "rule_of_law"))
+cor_df %>% 
+  filter(variable %in% c("government_effectiveness", "regulatory_quality"))
+cor_df %>% 
+  filter(variable %in% c("political_rights_score", "civil_liberties_score"))
+
+# remove highly correlated variables
+happiness_train2 <- happiness_train %>%
+  select(-government_expenditure_pct_gdp,
+         -rule_of_law, 
+         -regulatory_quality, 
+         -political_rights_score)
+happiness_train2
+
+```
+
+# There are 5 sets of approximately collinear variables among the full set of variables in the training data set. We want to reduce collinearity in our data because with multicollinearity, it is difficult to attain stable fit and to interpret coefficients, and the power of our model to identify independent variables that are statistically significant will be decreased.
+
+
+
+### Part (c)
+
+```{r}
+
+lm_cor2 <- lm(world_happiness_score ~ .,
+              data = select_if(happiness_train2, 
+                               is.numeric))
+summary(lm_cor2)
+
+```
+# happy_planet_index (test statistic = 2.500, p-value = 0.01437), hdi_index (test statistic = 2.967, p-value = 0.00393), and unemployment_pct (test statistic = -3.317, p-value = 0.00135) are significant because their p-value < 0.05.
+
+
+### Part (d)
+
+```{r}
+
+#(a)
+
+ls_fit_multi_2a <- lm(world_happiness_score ~ hdi_index + health_expenditure_per_person + 
+                      school_years + government_spending_score + women_mps_pct, 
+                      happiness_train_2a)
+data.frame(residuals = ls_fit_multi_2a$residuals, 
+           yhat = ls_fit_multi_2a$fitted) %>%
+  ggplot() +
+  geom_point(aes(x = yhat, 
+                 y = residuals),
+             alpha = 0.5) +
+  geom_hline(yintercept = 0) +
+  theme_classic() +
+  scale_x_continuous(breaks = 1:5 * 1e05,
+                     labels = comma(1:5 * 1e05)) +
+  scale_y_continuous(breaks = -2:3 * 1e05,
+                     labels = comma(-2:3 * 1e05))
+
+
+#(c)
+
+ls_fit_multi_2c <- lm(world_happiness_score ~ ., 
+                     select_if(happiness_train2, 
+                               is.numeric))
+data.frame(residuals = ls_fit_multi_2c$residuals, 
+           yhat = ls_fit_multi_2c$fitted) %>%
+  ggplot() +
+  geom_point(aes(x = yhat, y = residuals),
+             alpha = 0.5) +
+  geom_hline(yintercept = 0) +
+  theme_classic() +
+  scale_x_continuous(breaks = 1:5 * 1e05,
+                     labels = comma(1:5 * 1e05)) +
+  scale_y_continuous(breaks = -2:3 * 1e05,
+                     labels = comma(-2:3 * 1e05))
+
+
+```
+
+#For both, the errors seem to be homoskedastic because points on the residual scatter plot fall approximately evenly above and below the line.
+
+
+### Part (e)
+
+```{r}
+
+#(a)
+
+pred_test_cor_2a <- predict(ls_fit_multi_2a, 
+                            filter(happiness_test, 
+                                   country == "Switzerland"))
+pred_test_cor_2a
+
+
+#(c)
+
+pred_test_cor_2c <- predict(ls_fit_multi_2c, 
+                            filter(happiness_test, 
+                                   country == "Switzerland"))
+pred_test_cor_2c
+
+```
+
+
+### Part (f)
+
+```{r}
+
+#(a)
+
+rmse_2a <- rmse_vec(happiness_test$world_happiness_score,
+                    predict(ls_fit_multi_2a, 
+                            happiness_test))
+rmse_2a
+
+rsq_2a <- rsq_vec(happiness_test$world_happiness_score, 
+                  predict(ls_fit_multi_2a, 
+                          happiness_test))
+rsq_2a
+
+
+#(c)
+
+rmse_2c <- rmse_vec(happiness_test$world_happiness_score,
+                    predict(ls_fit_multi_2c, 
+                            happiness_test))
+rmse_2c
+
+rsq_2c <- rsq_vec(happiness_test$world_happiness_score, 
+                  predict(ls_fit_multi_2c,
+                          happiness_test))
+rsq_2c
+
+```
+
+#The rMSE of (c) linear fit is lower than (a) and the Rsquared of (c) is higher than (a). This indicates that that the (c) linear fit is better than (a).
+
+
+### Part (g)
+
+```{r}
+
+# log-transform
+
+happiness_train_2g <- transmute(happiness_train,
+                                log_world_happiness_score = log(world_happiness_score),
+                                log_hdi_index = log(hdi_index),
+                                log_health_expenditure_per_person = log(health_expenditure_per_person),
+                                log_school_years = log(school_years),
+                                log_government_spending_score = log(government_spending_score),
+                                log_women_mps_pct = log(women_mps_pct))
+happiness_train_2g_new <- happiness_train_2g
+happiness_train_2g_new[is.na(happiness_train_2g_new) | happiness_train_2g_new == "Inf" | happiness_train_2g_new == "-Inf"] <- NA
+
+lm_2g <- lm(log_world_happiness_score ~ log_hdi_index + log_health_expenditure_per_person + log_school_years + log_government_spending_score + log_women_mps_pct, 
+            select_if(happiness_train_2g_new, 
+                      is.numeric))
+
+data.frame(residuals = lm_2g$residuals, 
+           yhat = lm_2g$fitted) %>%
+  ggplot() +
+  geom_point(aes(x = yhat, y = residuals),
+             alpha = 0.5) +
+  geom_hline(yintercept = 0) +
+  theme_classic() +
+  scale_x_continuous(breaks = 1:5 * 1e05,
+                     labels = comma(1:5 * 1e05)) +
+  scale_y_continuous(breaks = -2:3 * 1e05,
+                     labels = comma(-2:3 * 1e05))
+
+happiness_test_2g <- transmute(happiness_test,
+                               log_world_happiness_score = log(world_happiness_score),
+                               log_hdi_index = log(hdi_index),
+                               log_health_expenditure_per_person = log(health_expenditure_per_person),
+                               log_school_years = log(school_years),
+                               log_government_spending_score = log(government_spending_score),
+                               log_women_mps_pct = log(women_mps_pct))
+happiness_test_2g_new <- happiness_test_2g
+happiness_test_2g_new[is.na(happiness_test_2g_new) | happiness_test_2g_new == "Inf" | happiness_test_2g_new == "-Inf"] <- NA
+
+pred_test_2g <- exp(predict(lm_2g, happiness_test_2g_new))
+rmse_2g <- rmse_vec(happiness_test$world_happiness_score, 
+                    pred_test_2g)
+rmse_2g
+rsq_2g <- rsq_vec(happiness_test$world_happiness_score, 
+                  pred_test_2g)
+rsq_2g
+
+```
+#The errors seem to be homoskedastic because points on the residual scatter plot of (g) linear fit fall approximately evenly above and below the line. The rMSE of (g) linear fit is higher than both (a) and (c), while the Rsquared of (g) is lower than both (a) and (c). This indicates that the (g) linear fit is not better.   
+
+
+## Problem 3: The distribution of $\beta$
+
+### Part (a)
+
+```{r}
+
+dat_3 <- data.frame("world_happiness_score" = c(happiness_train$world_happiness_score, 
+                                                happiness_test$world_happiness_score), 
+                    "hdi_index" = c(happiness_train$hdi_index, 
+                                    happiness_test$hdi_index))
+
+n_3a <- nrow(dat_3)
+x_3a <- dat_3$hdi_index
+y_3a <- dat_3$world_happiness_score
+beta_one_3a <- cov(x_3a, y_3a) / var(x_3a)
+beta_zero_3a <- mean(y_3a) - beta_one_3a * mean(x_3a)
+pred_3a <- beta_zero_3a + beta_one_3a * x_3a
+var_3a <- sum((y_3a - pred_3a) ^ 2) / (n_3a - 2)
+beta_zero_var_3a <- var_3a * sum(x_3a ^ 2) / (n_3a * sum(x_3a ^ 2) - sum(x_3a)^2)
+beta_one_var_3a <- n_3a * var_3a / (n_3a * sum(x_3a ^ 2) - sum(x_3a)^2)
+
+beta_zero_est_dist <- paste0("beta_zero_est ~ N(", 
+                             beta_zero_3a, 
+                             ",", 
+                             beta_zero_var_3a, 
+                             ")")
+beta_zero_est_dist
+
+beta_one_est_dist <- paste0("beta_one_est ~ N(", 
+                            beta_one_3a, 
+                            ",", 
+                            beta_one_var_3a, 
+                            ")")
+beta_one_est_dist
+
+beta_zero_3a
+beta_one_3a
+
+```
+
+
+
+### Part (b)
+
+```{r}
+
+boot_ls_beta_zero <- NULL
+boot_ls_beta_one <- NULL
+
+for (i in 1:1000) {
+  set.seed(i)
+  ls_model_3b <- lm(world_happiness_score ~ hdi_index,
+                    dat_3[sample(1:nrow(dat_3), nrow(dat_3), replace = TRUE), ])
+  boot_ls_beta_zero <- c(boot_ls_beta_zero, 
+                         ls_model_3b$coefficients[1])
+  boot_ls_beta_one <- c(boot_ls_beta_one, 
+                        ls_model_3b$coefficients[2])
+}
+
+boot_ls_beta_zero_df <- as.data.frame(boot_ls_beta_zero)
+boot_ls_beta_one_df <- as.data.frame(boot_ls_beta_one)
+
+boot_ls_beta_zero_df %>%
+  ggplot(aes(x = boot_ls_beta_zero)) +
+  geom_histogram(color = "white",
+                 binwidth = 0.1) +
+  stat_function(fun = function(x)
+                dnorm(x, 
+                      mean = beta_zero_3a, 
+                      sd = sqrt(beta_zero_var_3a)) * 0.1 * length(boot_ls_beta_zero), 
+                col = "orange") +
+  labs(x = "bootstrapped sample", 
+       title = "Non-parametric Bootstrap Estimates of LS Estimate of Beta Zero") +
+  theme_classic()
+
+boot_ls_beta_one_df %>%
+  ggplot() +
+  geom_histogram(aes(x = boot_ls_beta_one), color = "white",
+                 binwidth = 0.1) +
+  stat_function(fun = function(x)
+                dnorm(x, 
+                      mean = beta_one_3a, 
+                      sd = sqrt(beta_one_var_3a)) * 0.1 * length(boot_ls_beta_one), 
+                col = "orange") +
+  labs(x = "bootstrapped sample", 
+       title = "Non-parametric Bootstrap Estimates of LS Estimate of Beta One") +
+  theme_classic()
+
+```
+# The bootstrap distributions match up with my approximations of the theoretical distributions from part (a).
+
+
+### Part (c)
+
+```{r}
+
+boot_lad_beta_zero <- NULL
+boot_lad_beta_one <- NULL
+
+for (i in 1:1000) {
+  set.seed(3000 + i)
+  lad_model_3b <- lad(world_happiness_score ~ hdi_index,
+                      dat_3[sample(1:nrow(dat_3), nrow(dat_3), replace = TRUE), ])
+  boot_lad_beta_zero <- c(boot_lad_beta_zero, 
+                          lad_model_3b$coefficients[1])
+  boot_lad_beta_one <- c(boot_lad_beta_one, 
+                          lad_model_3b$coefficients[2])
+}
+
+boot_lad_beta_zero_df <- as.data.frame(boot_lad_beta_zero)
+boot_lad_beta_one_df <- as.data.frame(boot_lad_beta_one)
+
+boot_lad_beta_zero_df %>%
+  ggplot() +
+  geom_histogram(aes(x = boot_lad_beta_zero), color = "white",
+                 binwidth = 0.1) +
+  stat_function(fun = function(x)
+                dnorm(x, 
+                      mean = beta_zero_3a, 
+                      sd = sqrt(beta_zero_var_3a)) * 0.1 * length(boot_ls_beta_zero), 
+                col = "orange") +
+  labs(x = "bootstrapped sample", 
+       title = "Non-parametric Bootstrap Estimates of LAD Estimate of Beta Zero") +
+  theme_classic()
+
+boot_lad_beta_one_df %>%
+  ggplot() +
+  geom_histogram(aes(x = boot_lad_beta_one), color = "white",
+                 binwidth = 0.1) +
+  stat_function(fun = function(x)
+                dnorm(x, 
+                      mean = beta_one_3a, 
+                      sd = sqrt(beta_one_var_3a)) * 0.1 * length(boot_ls_beta_one), 
+                col = "orange") +
+  labs(x = "bootstrapped sample", 
+       title = "Non-parametric Bootstrap Estimates of LAD Estimate of Beta One") +
+  theme_classic()
+
+```
+
+# The bootstrap distributions do not match up with my approximations of the theoretical distributions from part (a).
+
+
